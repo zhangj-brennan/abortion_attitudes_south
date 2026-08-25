@@ -1,0 +1,58 @@
+id,state,State Abbr.,region,Abortion Access (2025),"Maternal Mortality Rate (2018-2022) *per 100,000 live births",State Partisan Supermajorities (2026)
+1,alabama,AL,Deep South,illegal,38.6,Rep - Both Chambers
+2,alaska,AK,West,protected,NR,None
+3,arizona,AZ,West,protected,30,None
+4,arkansas,AR,Peripheral South,illegal,38.3,Rep - Both Chambers
+5,california,CA,West,expanded access,10.5,Dem - Both Chambers
+6,colorado,CO,West,protected,16,None
+7,connecticut,CT,Northeast,expanded access,15.6,Dem - Both Chambers
+8,dc,DC,Peripheral South,protected,NR,N/A
+9,delaware,DE,Peripheral South,protected,NR,Dem - Both Chambers
+10,florida,FL,Peripheral South,hostile,24.1,Rep - Both Chambers
+11,georgia,GA,Deep South,hostile,32.1,None
+12,hawaii,HI,West,expanded access,NR,Dem - Both Chambers
+13,idaho,ID,West,illegal,20,Rep - Both Chambers
+14,illinois,IL,Midwest,expanded access,18.1,Dem - Both Chambers
+15,indiana,IN,Midwest,illegal,30.9,Rep - Both Chambers
+16,iowa,IA,Midwest,hostile,19.5,Rep - One Chamber
+17,kansas,KS,Midwest,protected,22.8,Rep - Both Chambers
+18,kentucky,KY,Peripheral South,illegal,34.6,Rep - Both Chambers
+19,louisiana,LA,Deep South,illegal,37.3,Rep - Both Chambers
+20,maine,ME,Northeast,protected,NR,None
+21,maryland,MD,Peripheral South,expanded access,21.3,Dem - Both Chambers
+22,massachusetts,MA,Northeast,protected,16.4,Dem - Both Chambers
+23,michigan,MI,Midwest,protected,19.1,None
+24,minnesota,MN,Midwest,expanded access,12.3,None
+25,mississippi,MS,Deep South,illegal,39.1,Rep - One Chamber
+26,missouri,MO,Midwest,protected,23.8,Rep - Both Chambers
+27,montana,MT,West,protected,NR,None
+28,nebraska,NE,Midwest,hostile,25.1,Rep - Both Chambers
+29,nevada,NV,West,protected,20.4,None
+30,new hampshire,NH,Northeast,not protected,NR,Rep - One Chamber
+31,new jersey,NJ,Northeast,expanded access,26,None
+32,new mexico,NM,West,not protected,28,None
+33,new york,NY,Northeast,expanded access,22.4,Dem - One Chamber
+34,north carolina,NC,Peripheral South,hostile,26.7,Rep - One Chamber
+35,north dakota,ND,Midwest,hostile,NR,Rep - Both Chambers
+36,ohio,OH,Midwest,protected,24.5,Rep - Both Chambers
+37,oklahoma,OK,Peripheral South,illegal,29.6,Rep - Both Chambers
+38,oregon,OR,West,expanded access,16.6,Dem - Both Chambers
+39,pennsylvania,PA,Northeast,hostile,17.5,None
+40,rhode island,RI,Northeast,protected,NR,Dem - Both Chambers
+41,south carolina,SC,Deep South,hostile,32.3,Rep - Both Chambers
+42,south dakota,SD,Midwest,illegal,NR,Rep - Both Chambers
+43,tennessee,TN,Peripheral South,illegal,41.1,Rep - Both Chambers
+44,texas,TX,Peripheral South,illegal,28.2,None
+45,utah,UT,West,hostile,15.5,Rep - Both Chambers
+46,vermont,VT,Northeast,expanded access,NR,None
+47,virginia,VA,Peripheral South,not protected,32.7,None
+48,washington,WA,West,expanded access,18,None
+49,west virginia,WV,Peripheral South,illegal,23.9,Rep - Both Chambers
+50,wisconsin,WI,Midwest,hostile,13.2,None
+51,wyoming,WY,West,hostile,NR,Rep - Both Chambers
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,"Source: https://www.kff.org/state-health-policy-data/state-indicator/maternal-deaths-and-mortality-rates-per-100000-live-births/?currentTimeframe=0&sortModel=%7B%22colId%22:%22Location%22,%22sort%22:%22asc%22%7D",Source: https://www.multistate.us/resources/2026-state-legislative-supermajorities

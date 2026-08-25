@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>State Abortion Landscape</title>
+<!--
+  Subtitle: Toggle each state between its true geographic shape and an
+  equal-area tile in a 51-cell grid, so no state's visual weight depends
+  on its land area. Pick which of four columns colors the map with the
+  buttons above the legend.
+
+  Sources: State boundaries — US Census Bureau, via us-atlas (states-10m),
+  https://github.com/topojson/us-atlas. Shape morphing — Flubber,
+  https://github.com/veltman/flubber.
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="container">
+  <div id="title">
+    <h1 id="pageTitle">State Abortion Landscape</h1>
+  </div>
+
+  <div class="panel">
+    <div class="metric-buttons" id="metricButtons"></div>
+    <div class="legend">
+      <h3 id="legendTitle">Change in value</h3>
+      <div class="legend-buckets" id="legendBuckets"></div>
+      <span class="legend-note" id="noDataNote"><span class="swatch"></span> <span id="noDataNoteText"></span></span>
+    </div>
+    <div class="map-wrap">
+      <div class="metric-note" id="metricNote"></div>
+      <svg id="chart" viewBox="0 0 1120 850" role="img" aria-label="Map of US states morphing between true geography and an equal-area tile grid"></svg>
+      <div id="status" class="status">Loading state boundaries…</div>
+    </div>
+    <div class="controls">
+      <div class="view-toggle">
+        <span class="toggle-label active" id="labelGeo">Geographic</span>
+        <button class="switch" id="toggle" role="switch" aria-checked="false" aria-label="Toggle between geographic and cartogram view">
+          <span class="switch-knob"></span>
+        </button>
+        <span class="toggle-label" id="labelCarto">Cartogram</span>
+      </div>
+    </div>
+  </div>
+  <p class="footnote" id="sourceLine"></p>
+</div>
+
+<div id="tooltip" class="tooltip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flubber@0.4.2/build/flubber.min.js"></script>
+<script>
+(async function () {
+  // ==========================================================================
+  // CONFIG — everything a new map needs to change lives here. The rest of
+  // this file is the shared geo↔cartogram engine (US state grid, morph,
+  // callout layout for the small Northeast states) and shouldn't need edits
+  // unless you're changing which states get pulled out as callouts.
+  // ==========================================================================
+  const CONFIG = {
+    // Page text
+    pageTitle: "State Abortion Landscape",
+    sourceHtml: "<strong>Sources:</strong> Abortion access — Brennan Center for Justice, 2025. " +
+      "Maternal mortality rate (2018–2022) — KFF, State Health Facts. " +
+      "State partisan supermajorities (2026) — MultiState.us.",
+
+    // Data — one row per state. The CSV's own header text is used directly
+    // as each metric's lookup key below, so re-pointing this at a new file
+    // just means updating dataCsvPath + the metrics list's "key" fields.
+    dataCsvPath: "abortion-laws-by-state - Figure 1 - Map.csv",
+    dataColumns: { abbr: "State Abbr." },
+
+    // Color used for any state missing a value for the active metric.
+    noDataColor: "#cfcdc7",
+
+    // The four columns shown as buttons above the legend. The map recolors,
+    // relabels, and rebuilds its legend from whichever one is active.
+    // - categorical: fixed color + short on-map label per category, in the
+    //   order they should appear in the legend.
+    // - numeric: a light→dark single-hue scale built from the data's min/max,
+    //   with "NR" (not reported) treated as missing.
+    metrics: [
+      {
+        key: "Abortion Access (2025)",
+        buttonLabel: "Abortion Access",
+        legendTitle: "Abortion access (2025)",
+        type: "categorical",
+        noDataLabel: "Not classified",
+        categories: [
+          { value: "expanded access", label: "Expanded access", color: "#12a657" },
+          { value: "protected", label: "Protected", color: "#88ba2c" },
+          { value: "not protected", label: "Not protected", color: "#ffcf01" },
+          { value: "hostile", label: "Hostile", color: "#f67613" },
+          { value: "illegal", label: "Illegal", color: "#ed1c24" }
+        ]
+      },
+      {
+        key: "Maternal Mortality Rate (2018-2022) *per 100,000 live births",
+        buttonLabel: "Maternal Mortality Rate (2018 - 2022)",
+        legendTitle: "Maternal Mortality Rate (2018 - 2022)",
+        note: "Per 100,000 live births",
+        type: "numeric",
+        noDataLabel: "Not reported",
+        parse: raw => (raw == null || raw.trim() === "" || raw.trim().toUpperCase() === "NR") ? null : +raw,
+        format: v => `${v} per 100,000 live births`,
+        colorRange: ["#e8e7e2", "#711471"]
+      },
+      {
+        key: "State Partisan Supermajorities (2026)",
+        buttonLabel: "State Partisan Supermajorities (2026)",
+        legendTitle: "State Partisan Supermajorities (2026)",
+        type: "categorical",
+        noDataLabel: "No data",
+        categories: [
+          { value: "Dem - Both Chambers", label: "Dem — both chambers", color: "#007194" },
+          { value: "Dem - One Chamber", label: "Dem — one chamber", color: "#80b8c9" },
+          { value: "None", label: "No supermajority", color: "#cfcdc7" },
+          { value: "N/A", label: "No state legislature", color: "#e3e2dc" },
+          { value: "Rep - One Chamber", label: "Rep — one chamber", color: "#f68d91" },
+          { value: "Rep - Both Chambers", label: "Rep — both chambers", color: "#ed1c24" }
+        ]
+      }
+    ]
+  };
+  // ==========================================================================
+  // END CONFIG
+  // ==========================================================================
+
+  document.getElementById("pageTitle").textContent = CONFIG.pageTitle;
+  document.title = CONFIG.pageTitle;
+  document.getElementById("sourceLine").innerHTML = CONFIG.sourceHtml;
+
+  const root = document.documentElement.style;
+  root.setProperty("--div-none", CONFIG.noDataColor);
+
+  const WIDTH = 960, HEIGHT = 850, CANVAS_W = 1120;
+  const svg = d3.select("#chart");
+  const statusEl = document.getElementById("status");
+  const tooltip = d3.select("#tooltip");
+
+  const FIPS_TO_ABBR = {
+    "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC",
+    "12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY",
+    "22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT",
+    "31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH",
+    "40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT",
+    "50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"
+  };
+
+  const GRID = {
+    AK:[0,0], ME:[10,0],
+    NH:[10,1], VT:[9,1],
+    WA:[0,2], ID:[1,2], MT:[2,2], ND:[3,2], MN:[4,2], WI:[5,2], MI:[6,2], NY:[7,2], MA:[9,2], RI:[10,2],
+    OR:[0,3], NV:[1,3], WY:[2,3], SD:[3,3], IA:[4,3], IL:[5,3], IN:[6,3], OH:[7,3], PA:[8,3], NJ:[9,3], CT:[10,3],
+    CA:[0,4], UT:[1,4], CO:[2,4], NE:[3,4], MO:[4,4], KY:[5,4], WV:[6,4], VA:[7,4], MD:[8,4], DE:[9,4],
+    AZ:[1,5], NM:[2,5], KS:[3,5], AR:[4,5], TN:[5,5], NC:[6,5], SC:[7,5], DC:[8,5],
+    OK:[3,6], LA:[4,6], MS:[5,6], AL:[6,6], GA:[7,6],
+    HI:[0,7], TX:[3,7], FL:[8,7]
+  };
+
+  const CALLOUT_STATES = ["NJ", "RI", "DE", "MD"];
+  const CALLOUT_X = 1030;
+  const CALLOUT_Y_OFFSET = { MD: 61, DE: 18 };
+  const CALLOUT_SHIFT = {};
+  const CALLOUT_RUN = 4;
+  const CALLOUT_GAP = 5;
+
+  const COLS = 11, ROWS = 8;
+  const CELL = 96, GAP = 3;
+  const GRID_W = COLS * CELL, GRID_H = ROWS * CELL;
+  const GRID_X0 = (CANVAS_W - GRID_W) / 2, GRID_Y0 = (HEIGHT - GRID_H) / 2;
+
+  function squarePath(col, row) {
+    const x = GRID_X0 + col * CELL + GAP / 2;
+    const y = GRID_Y0 + row * CELL + GAP / 2;
+    const s = CELL - GAP;
+    return `M${x},${y}H${x + s}V${y + s}H${x}Z`;
+  }
+  function squareCentroid(col, row) {
+    return [GRID_X0 + col * CELL + CELL / 2, GRID_Y0 + row * CELL + CELL / 2];
+  }
+
+  function largestRingPath(feature, projection) {
+    const geom = feature.geometry;
+    const polygons = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
+    let best = null, bestArea = -1;
+    for (const poly of polygons) {
+      const ring = poly[0];
+      const pts = ring.map(pt => projection(pt)).filter(Boolean);
+      if (pts.length < 3) continue;
+      const area = Math.abs(d3.polygonArea(pts));
+      if (area > bestArea) { bestArea = area; best = pts; }
+    }
+    if (!best) return null;
+    return `M${best.map(p => p.join(",")).join("L")}Z`;
+  }
+
+  // ---- Metric helpers -------------------------------------------------
+  // A "metric" is one of the CONFIG.metrics entries. Each raw CSV row is
+  // kept around unparsed on the state datum (d.row) so switching the
+  // active metric never needs to re-fetch or re-derive anything else.
+  function metricCategory(metric, raw) {
+    const value = (raw || "").trim();
+    return metric.categories.find(c => c.value === value) || null;
+  }
+
+  function metricNumericValue(metric, raw) {
+    return metric.parse(raw);
+  }
+
+  // Display text for one metric on one row, independent of which metric
+  // is currently active — used to list every column in the tooltip.
+  function metricDisplayValue(metric, row) {
+    const raw = row ? row[metric.key] : undefined;
+    if (metric.type === "categorical") {
+      const cat = row ? metricCategory(metric, raw) : null;
+      return cat ? cat.label : metric.noDataLabel;
+    }
+    const value = row ? metricNumericValue(metric, raw) : null;
+    const hasData = value != null && !Number.isNaN(value);
+    return hasData ? metric.format(value) : metric.noDataLabel;
+  }
+
+  function buildNumericScale(metric, rows) {
+    const values = rows
+      .map(r => metricNumericValue(metric, r[metric.key]))
+      .filter(v => v != null && !Number.isNaN(v));
+    const domain = [Math.min(...values), Math.max(...values)];
+    const scale = d3.scaleSequential(d3.interpolateRgb(metric.colorRange[0], metric.colorRange[1])).domain(domain);
+    return { scale, domain };
+  }
+
+  // Recomputes hasData / fill / label / tooltip text for every state, for
+  // the given metric. Pure data — no DOM writes here.
+  function computeMetric(states, metric) {
+    if (metric.type === "numeric" && !metric._scale) {
+      metric._scale = buildNumericScale(metric, states.filter(d => d.row).map(d => d.row));
+    }
+    for (const d of states) {
+      const raw = d.row ? d.row[metric.key] : undefined;
+      if (metric.type === "categorical") {
+        const cat = d.row ? metricCategory(metric, raw) : null;
+        d.hasData = !!cat;
+        d.fill = cat ? cat.color : CONFIG.noDataColor;
+      } else {
+        const value = d.row ? metricNumericValue(metric, raw) : null;
+        d.hasData = value != null && !Number.isNaN(value);
+        d.fill = d.hasData ? metric._scale.scale(value) : CONFIG.noDataColor;
+      }
+    }
+  }
+
+  let topo, dataRows;
+  try {
+    [topo, dataRows] = await Promise.all([
+      d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json"),
+      d3.csv(CONFIG.dataCsvPath)
+    ]);
+  } catch (err) {
+    statusEl.textContent = "Could not load map data — check your network connection and that " + CONFIG.dataCsvPath + " exists next to this page.";
+    return;
+  }
+
+  dataRows = dataRows.filter(r => (r[CONFIG.dataColumns.abbr] || "").trim() !== "");
+
+  const DATA = dataRows.reduce((acc, d) => {
+    acc[d[CONFIG.dataColumns.abbr].trim()] = d;
+    return acc;
+  }, {});
+
+  const objectKey = topo.objects.states ? "states" : Object.keys(topo.objects)[0];
+  const fc = topojson.feature(topo, topo.objects[objectKey]);
+  const features = fc.features.filter(f => {
+    const abbr = FIPS_TO_ABBR[String(f.id).padStart(2, "0")];
+    return abbr && GRID[abbr];
+  });
+
+  const projection = d3.geoAlbersUsa().fitSize([WIDTH, HEIGHT], fc);
+  const geoPath = d3.geoPath(projection);
+
+  const LABEL_OFFSETS = {
+    MI: [6, 20],
+    LA: [-14, 0],
+    CA: [-10, 0],
+    FL: [10, 0],
+    MA: [0, -2]
+  };
+
+  const states = features.map(f => {
+    const abbr = FIPS_TO_ABBR[String(f.id).padStart(2, "0")];
+    const [col, row] = GRID[abbr];
+    const geoD = largestRingPath(f, projection);
+    const fullGeoD = geoPath(f);
+    const gridD = squarePath(col, row);
+    const geoC = geoPath.centroid(f);
+    const gridC = squareCentroid(col, row);
+    const offset = LABEL_OFFSETS[abbr] || [0, 0];
+    const labelGeoC = [geoC[0] + offset[0], geoC[1] + offset[1]];
+    return {
+      id: f.id,
+      abbr,
+      name: f.properties.name,
+      row: DATA[abbr],
+      geoD, fullGeoD, gridD,
+      geoC, gridC, labelGeoC,
+      small: CALLOUT_STATES.includes(abbr),
+      lineStart: [geoC[0], geoC[1] + (CALLOUT_SHIFT[abbr] || 0)],
+      anchor: CALLOUT_STATES.includes(abbr)
+        ? [CALLOUT_X, geoC[1] + (CALLOUT_SHIFT[abbr] || 0) + (CALLOUT_Y_OFFSET[abbr] || 0)]
+        : null,
+      interp: flubber.interpolate(geoD, gridD, { maxSegmentLength: 6 })
+    };
+  });
+
+  let currentMetric = CONFIG.metrics[0];
+  computeMetric(states, currentMetric);
+
+  statusEl.remove();
+
+  const gStates = svg.append("g");
+  const gLines = svg.append("g");
+  const gLabels = svg.append("g");
+  const gSmallLabels = svg.append("g");
+  const gCallouts = svg.append("g");
+
+  function tooltipHtml(d) {
+    const region = d.row ? (d.row["region"] || "").trim() : "";
+    const lines = CONFIG.metrics.map(metric => `${metric.legendTitle}: ${metricDisplayValue(metric, d.row)}`);
+    if (region) lines.push(`Region: ${region}`);
+    return `<strong>${d.name}</strong><br>` +
+      lines.map(line => `<span class="sub">${line}</span>`).join("<br>");
+  }
+
+  const paths = gStates.selectAll("path.state")
+    .data(states, d => d.id)
+    .join("path")
+    .attr("class", "state")
+    .attr("d", d => d.fullGeoD)
+    .attr("fill", d => d.fill)
+    .on("mouseenter", function (event, d) {
+      paths.classed("is-hover", false);
+      d3.select(this).classed("is-hover", true).raise();
+    })
+    .on("mousemove", (event, d) => {
+      tooltip
+        .style("left", event.clientX + "px")
+        .style("top", event.clientY + "px")
+        .style("opacity", 1)
+        .html(tooltipHtml(d));
+    })
+    .on("mouseleave", function () {
+      d3.select(this).classed("is-hover", false);
+      tooltip.style("opacity", 0);
+    })
+    .on("touchstart", function (event, d) {
+      event.preventDefault();
+      paths.classed("is-hover", false);
+      d3.select(this).classed("is-hover", true).raise();
+      const touch = event.touches[0];
+      tooltip
+        .style("left", touch.clientX + "px")
+        .style("top", touch.clientY + "px")
+        .style("opacity", 1)
+        .html(tooltipHtml(d));
+    });
+
+  document.addEventListener("touchstart", event => {
+    if (!event.target.closest("path.state")) {
+      paths.classed("is-hover", false);
+      tooltip.style("opacity", 0);
+    }
+  });
+
+  svg.on("mouseleave", () => {
+    paths.classed("is-hover", false);
+    tooltip.style("opacity", 0);
+  });
+
+  const normalStates = states.filter(d => !d.small);
+  const smallStates = states.filter(d => d.small);
+
+  const calloutLines = gLines.selectAll("polyline.callout-line")
+    .data(smallStates, d => d.id)
+    .join("polyline")
+    .attr("class", "callout-line")
+    .attr("points", d => `${d.lineStart[0]},${d.lineStart[1]} ${d.anchor[0] - CALLOUT_RUN},${d.anchor[1]} ${d.anchor[0]},${d.anchor[1]}`)
+    .attr("opacity", 0);
+
+  const normalLabels = gLabels.selectAll("g.state-label")
+    .data(normalStates, d => d.id)
+    .join("g")
+    .attr("class", "state-label");
+
+  normalLabels.append("text")
+    .attr("class", "value")
+    .attr("dy", 0)
+    .text(d => d.abbr);
+
+  const smallInteriorLabels = gSmallLabels.selectAll("g.state-label")
+    .data(smallStates, d => d.id)
+    .join("g")
+    .attr("class", "state-label")
+    .attr("transform", d => `translate(${d.gridC[0]},${d.gridC[1]})`)
+    .attr("opacity", 0);
+
+  smallInteriorLabels.append("text")
+    .attr("class", "value")
+    .attr("dy", 0)
+    .text(d => d.abbr);
+
+  const callouts = gCallouts.selectAll("g.callout")
+    .data(smallStates, d => d.id)
+    .join("g")
+    .attr("class", "callout")
+    .attr("transform", d => `translate(${d.anchor[0] + CALLOUT_GAP},${d.anchor[1]})`)
+    .attr("opacity", 0);
+
+  callouts.append("text")
+    .attr("class", "callout-value")
+    .attr("dy", 0)
+    .text(d => d.abbr);
+
+  const labelOpacity = d3.scaleLinear().domain([0.35, 0.75]).range([0, 1]).clamp(true);
+  const calloutOpacity = d3.scaleLinear().domain([0.15, 0.4]).range([1, 0]).clamp(true);
+
+  svg.selectAll("g.state-label text")
+    .style("text-shadow", "0 0 3px rgba(255,255,255,0.75)");
+
+  const toggleBtn = document.getElementById("toggle");
+  const labelGeo = document.getElementById("labelGeo");
+  const labelCarto = document.getElementById("labelCarto");
+
+  function update(t) {
+    paths.attr("d", d => t === 0 ? d.fullGeoD : d.interp(t));
+    normalLabels.attr("transform", d => {
+      const x = d.labelGeoC[0] + (d.gridC[0] - d.labelGeoC[0]) * t;
+      const y = d.labelGeoC[1] + (d.gridC[1] - d.labelGeoC[1]) * t;
+      return `translate(${x},${y})`;
+    });
+    smallInteriorLabels.attr("opacity", labelOpacity(t));
+    callouts.attr("opacity", calloutOpacity(t));
+    calloutLines.attr("opacity", calloutOpacity(t));
+    toggleBtn.setAttribute("aria-checked", t > 0.5);
+    labelGeo.classList.toggle("active", t <= 0.5);
+    labelCarto.classList.toggle("active", t > 0.5);
+  }
+
+  let currentT = 0;
+  let timer = null;
+
+  function stopAnim() {
+    if (timer) { timer.stop(); timer = null; }
+  }
+
+  function animateTo(target) {
+    stopAnim();
+    const start = currentT;
+    const duration = 500;
+    timer = d3.timer(elapsed => {
+      const tt = Math.min(1, elapsed / duration);
+      const eased = d3.easeCubicInOut(tt);
+      currentT = start + (target - start) * eased;
+      update(currentT);
+      if (tt >= 1) { timer.stop(); timer = null; }
+    });
+  }
+
+  toggleBtn.addEventListener("click", () => animateTo(currentT <= 0.5 ? 1 : 0));
+
+  // ---- Legend -----------------------------------------------------------
+  const legendTitleEl = document.getElementById("legendTitle");
+  const legendBucketsEl = document.getElementById("legendBuckets");
+  const noDataNoteEl = document.getElementById("noDataNote");
+  const noDataNoteTextEl = document.getElementById("noDataNoteText");
+  const metricNoteEl = document.getElementById("metricNote");
+
+  function addLegendBucket(color, label) {
+    const bucket = document.createElement("div");
+    bucket.className = "legend-bucket";
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = color;
+    const text = document.createElement("span");
+    text.textContent = label;
+    bucket.append(swatch, text);
+    legendBucketsEl.append(bucket);
+  }
+
+  function renderLegend(metric) {
+    legendTitleEl.textContent = metric.legendTitle;
+    legendBucketsEl.innerHTML = "";
+    legendBucketsEl.classList.toggle("legend-buckets--categorical", metric.type === "categorical");
+
+    if (metric.type === "categorical") {
+      metric.categories.forEach(cat => addLegendBucket(cat.color, cat.label));
+    } else {
+      const [min, max] = metric._scale.domain;
+      const steps = 5;
+      for (let i = 0; i < steps; i++) {
+        const v = min + (i / (steps - 1)) * (max - min);
+        addLegendBucket(metric._scale.scale(v), Math.round(v * 10) / 10);
+      }
+    }
+
+    const anyNoData = states.some(d => !d.hasData);
+    noDataNoteEl.style.display = anyNoData ? "" : "none";
+    noDataNoteTextEl.textContent = metric.noDataLabel;
+
+    metricNoteEl.textContent = metric.note || "";
+    metricNoteEl.style.display = metric.note ? "" : "none";
+  }
+
+  // ---- Metric buttons -----------------------------------------------------
+  const metricButtonsEl = document.getElementById("metricButtons");
+
+  function renderMetricButtons() {
+    metricButtonsEl.innerHTML = "";
+    CONFIG.metrics.forEach(metric => {
+      const btn = document.createElement("button");
+      btn.className = "toggle-btn";
+      btn.type = "button";
+      btn.textContent = metric.buttonLabel;
+      btn.classList.toggle("active", metric.key === currentMetric.key);
+      btn.setAttribute("aria-pressed", metric.key === currentMetric.key);
+      btn.addEventListener("click", () => setMetric(metric));
+      metricButtonsEl.append(btn);
+    });
+  }
+
+  function setMetric(metric) {
+    if (metric === currentMetric) return;
+    currentMetric = metric;
+    computeMetric(states, currentMetric);
+
+    paths.transition().duration(250).attr("fill", d => d.fill);
+
+    renderLegend(currentMetric);
+    renderMetricButtons();
+  }
+
+  renderLegend(currentMetric);
+  renderMetricButtons();
+
+  const MIN_LABEL_PX = 12;
+  const BASE_VALUE_SIZE = 14;
+  const valueTexts = svg.selectAll("text.value, text.callout-value");
+
+  function applyMinLabelSize() {
+    const renderedWidth = svg.node().getBoundingClientRect().width;
+    if (!renderedWidth) return;
+    const scale = renderedWidth / 1120;
+    const minViewBoxSize = MIN_LABEL_PX / scale;
+    const valueSize = Math.max(BASE_VALUE_SIZE, minViewBoxSize);
+    valueTexts.style("font-size", valueSize + "px");
+  }
+
+  applyMinLabelSize();
+  window.addEventListener("resize", applyMinLabelSize);
+
+  if (window.innerWidth < 500) {
+    currentT = 1;
+    update(1);
+  } else {
+    update(0);
+  }
+})();
+</script>
+</body>
+</html>
