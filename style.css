@@ -208,10 +208,13 @@ h3 {
   align-items: flex-start;
   gap: 6px;
   padding: 10px 20px 14px;
+  min-height: 108px;
+  box-sizing: border-box;
 }
 .legend h3 {
   flex: none;
 }
+.legend-row { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
 .legend-buckets { display: flex; gap: 4px; }
 .legend-bucket {
   display: flex;
@@ -257,12 +260,12 @@ h3 {
 }
 
 .metric-note {
-  text-align: center;
+  text-align: left;
   font-family: "BentonMedium";
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 0 0 6px;
+  padding: 4px 0 0;
 }
 
 svg { display: block; width: 100%; height: auto; }

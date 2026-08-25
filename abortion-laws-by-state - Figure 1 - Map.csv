@@ -6,7 +6,7 @@ id,state,State Abbr.,region,Abortion Access (2025),"Maternal Mortality Rate (201
 5,california,CA,West,expanded access,10.5,Dem - Both Chambers
 6,colorado,CO,West,protected,16,None
 7,connecticut,CT,Northeast,expanded access,15.6,Dem - Both Chambers
-8,dc,DC,Peripheral South,protected,NR,N/A
+8,dc,DC,Peripheral South,protected,NR,None
 9,delaware,DE,Peripheral South,protected,NR,Dem - Both Chambers
 10,florida,FL,Peripheral South,hostile,24.1,Rep - Both Chambers
 11,georgia,GA,Deep South,hostile,32.1,None
@@ -50,9 +50,3 @@ id,state,State Abbr.,region,Abortion Access (2025),"Maternal Mortality Rate (201
 49,west virginia,WV,Peripheral South,illegal,23.9,Rep - Both Chambers
 50,wisconsin,WI,Midwest,hostile,13.2,None
 51,wyoming,WY,West,hostile,NR,Rep - Both Chambers
-,,,,,,
-,,,,,,
-,,,,,,
-,,,,,,
-,,,,,,
-,,,,,"Source: https://www.kff.org/state-health-policy-data/state-indicator/maternal-deaths-and-mortality-rates-per-100000-live-births/?currentTimeframe=0&sortModel=%7B%22colId%22:%22Location%22,%22sort%22:%22asc%22%7D",Source: https://www.multistate.us/resources/2026-state-legislative-supermajorities
