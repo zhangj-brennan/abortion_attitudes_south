@@ -34,6 +34,10 @@
       <svg id="chart" viewBox="0 0 1120 850" role="img" aria-label="Map of US states morphing between true geography and an equal-area tile grid"></svg>
       <div id="status" class="status">Loading state boundaries…</div>
     </div>
+    <div class="region-buttons-row">
+      <span class="region-buttons-label">Highlight a region</span>
+      <div class="metric-buttons" id="regionButtons"></div>
+    </div>
     <div class="controls">
       <div class="view-toggle">
         <span class="toggle-label active" id="labelGeo">Geographic</span>
@@ -277,7 +281,6 @@
     const abbr = FIPS_TO_ABBR[String(f.id).padStart(2, "0")];
     return abbr && GRID[abbr];
   });
-
   const projection = d3.geoAlbersUsa().fitSize([WIDTH, HEIGHT], fc);
   const geoPath = d3.geoPath(projection);
 
@@ -328,10 +331,38 @@
 
   function tooltipHtml(d) {
     const region = d.row ? (d.row["region"] || "").trim() : "";
-    const lines = CONFIG.metrics.map(metric => `${metric.legendTitle}: ${metricDisplayValue(metric, d.row)}`);
-    if (region) lines.push(`Region: ${region}`);
+    const metricLines = CONFIG.metrics.map(metric => `${metric.legendTitle}: ${metricDisplayValue(metric, d.row)}`);
     return `<strong>${d.name}</strong><br>` +
-      lines.map(line => `<span class="sub">${line}</span>`).join("<br>");
+      (region ? `<span class="sub">${region}</span><br><br>` : "") +
+      metricLines.map(line => `<span class="sub">${line}</span>`).join("<br>");
+  }
+
+  // Positions the tooltip at (x, y), then nudges it back onscreen if its
+  // measured size would push it past the viewport edge — the content
+  // varies a lot (region name + 4 metric lines), so its box size isn't
+  // known until after it's rendered with real content.
+  const TOOLTIP_MARGIN = 8;
+  const tooltipNode = tooltip.node();
+
+  function showTooltip(x, y, html) {
+    tooltip.classed("tooltip--below", false).html(html);
+    tooltip.style("left", x + "px").style("top", y + "px");
+
+    let rect = tooltipNode.getBoundingClientRect();
+    if (rect.top < TOOLTIP_MARGIN) {
+      tooltip.classed("tooltip--below", true);
+      rect = tooltipNode.getBoundingClientRect();
+    }
+
+    let dx = 0;
+    if (rect.left < TOOLTIP_MARGIN) {
+      dx = TOOLTIP_MARGIN - rect.left;
+    } else if (rect.right > window.innerWidth - TOOLTIP_MARGIN) {
+      dx = (window.innerWidth - TOOLTIP_MARGIN) - rect.right;
+    }
+    if (dx !== 0) tooltip.style("left", (x + dx) + "px");
+
+    tooltip.style("opacity", 1);
   }
 
   const paths = gStates.selectAll("path.state")
@@ -345,11 +376,7 @@
       d3.select(this).classed("is-hover", true).raise();
     })
     .on("mousemove", (event, d) => {
-      tooltip
-        .style("left", event.clientX + "px")
-        .style("top", event.clientY + "px")
-        .style("opacity", 1)
-        .html(tooltipHtml(d));
+      showTooltip(event.clientX, event.clientY, tooltipHtml(d));
     })
     .on("mouseleave", function () {
       d3.select(this).classed("is-hover", false);
@@ -360,11 +387,7 @@
       paths.classed("is-hover", false);
       d3.select(this).classed("is-hover", true).raise();
       const touch = event.touches[0];
-      tooltip
-        .style("left", touch.clientX + "px")
-        .style("top", touch.clientY + "px")
-        .style("opacity", 1)
-        .html(tooltipHtml(d));
+      showTooltip(touch.clientX, touch.clientY, tooltipHtml(d));
     });
 
   document.addEventListener("touchstart", event => {
@@ -440,8 +463,8 @@
       const y = d.labelGeoC[1] + (d.gridC[1] - d.labelGeoC[1]) * t;
       return `translate(${x},${y})`;
     });
-    smallInteriorLabels.attr("opacity", labelOpacity(t));
-    callouts.attr("opacity", calloutOpacity(t));
+    smallInteriorLabels.attr("opacity", d => labelOpacity(t) * (isOutsideRegion(d, fadeRegion) ? 0.35 : 1));
+    callouts.attr("opacity", d => calloutOpacity(t) * (isOutsideRegion(d, fadeRegion) ? 0.35 : 1));
     calloutLines.attr("opacity", calloutOpacity(t));
     toggleBtn.setAttribute("aria-checked", t > 0.5);
     labelGeo.classList.toggle("active", t <= 0.5);
@@ -543,6 +566,49 @@
 
   renderLegend(currentMetric);
   renderMetricButtons();
+
+  // ---- Region highlight buttons -------------------------------------------
+  // Independent of the metric buttons above: hovering or clicking a region
+  // fades every state outside it, regardless of which metric is coloring
+  // the map.
+  const REGIONS = ["Northeast", "Midwest", "West", "Peripheral South", "Deep South"];
+  const regionButtonsEl = document.getElementById("regionButtons");
+  let activeRegion = null;
+  let fadeRegion = null;
+
+  function isOutsideRegion(d, region) {
+    return !!region && (!d.row || (d.row["region"] || "").trim() !== region);
+  }
+
+  function applyRegionFade(region) {
+    fadeRegion = region;
+    paths.classed("region-faded", d => isOutsideRegion(d, region));
+    normalLabels.classed("region-faded", d => isOutsideRegion(d, region));
+    smallInteriorLabels.attr("opacity", d => labelOpacity(currentT) * (isOutsideRegion(d, region) ? 0.35 : 1));
+    callouts.attr("opacity", d => calloutOpacity(currentT) * (isOutsideRegion(d, region) ? 0.35 : 1));
+  }
+
+  function renderRegionButtons() {
+    regionButtonsEl.innerHTML = "";
+    REGIONS.forEach(region => {
+      const btn = document.createElement("button");
+      btn.className = "region-btn";
+      btn.type = "button";
+      btn.textContent = region;
+      btn.classList.toggle("active", region === activeRegion);
+      btn.setAttribute("aria-pressed", region === activeRegion);
+      btn.addEventListener("mouseenter", () => applyRegionFade(region));
+      btn.addEventListener("mouseleave", () => applyRegionFade(activeRegion));
+      btn.addEventListener("click", () => {
+        activeRegion = activeRegion === region ? null : region;
+        renderRegionButtons();
+        applyRegionFade(activeRegion);
+      });
+      regionButtonsEl.append(btn);
+    });
+  }
+
+  renderRegionButtons();
 
   const MIN_LABEL_PX = 12;
   const BASE_VALUE_SIZE = 14;

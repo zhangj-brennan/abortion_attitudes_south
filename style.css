@@ -125,6 +125,41 @@ h3 {
   padding: 0 20px 14px;
 }
 
+.region-buttons-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 20px 12px;
+}
+.region-buttons-row .metric-buttons {
+  padding: 0;
+  gap: 6px;
+}
+.region-buttons-label {
+  font-family: "BentonStrong";
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.region-btn {
+  font-family: "BentonStrong";
+  font-size: 10px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid black;
+  border-radius: var(--radius);
+  background-color: white;
+  color: black;
+  cursor: pointer;
+}
+.region-btn.active {
+  background-color: black;
+  color: white;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -246,12 +281,22 @@ path.state {
   stroke-width: 1;
   stroke-linejoin: round;
   cursor: pointer;
+  opacity: 1;
+  transition: opacity 150ms ease;
 }
 path.state.is-hover {
   stroke: black;
   stroke-width: 3;
 }
 
+path.state.region-faded,
+g.state-label.region-faded {
+  opacity: 0.35;
+}
+
+g.state-label {
+  transition: opacity 150ms ease;
+}
 g.state-label text {
   text-anchor: middle;
   dominant-baseline: central;
@@ -290,12 +335,16 @@ g.callout text.callout-value {
   border-radius: 0;
   font-size: 13px;
   line-height: 1.4;
+  min-width: 200px;
   max-width: 320px;
   opacity: 0;
   transform: translate(-50%, calc(-100% - 12px));
   transition: opacity 120ms ease;
   white-space: normal;
   z-index: 5;
+}
+.tooltip.tooltip--below {
+  transform: translate(-50%, 12px);
 }
 .tooltip strong { font-family: "BentonStrong"; }
 .tooltip .sub { font-family: "Benton"; }
