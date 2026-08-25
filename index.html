@@ -35,8 +35,8 @@
       <div id="status" class="status">Loading state boundaries…</div>
     </div>
     <div class="region-buttons-row">
-      <span class="region-buttons-label">Highlight a region</span>
-      <div class="metric-buttons" id="regionButtons"></div>
+      <label class="region-buttons-label" for="regionSelect">Highlight a region</label>
+      <select class="region-select" id="regionSelect"></select>
     </div>
     <div class="controls">
       <div class="view-toggle">
@@ -165,11 +165,11 @@
     HI:[0,7], TX:[3,7], FL:[8,7]
   };
 
-  const CALLOUT_STATES = ["NJ", "RI", "DE", "MD"];
-  const CALLOUT_X = 1030;
+  const CALLOUT_STATES = ["NJ", "RI", "DE", "MD", "NH"];
+  const CALLOUT_X = 995;
   const CALLOUT_Y_OFFSET = { MD: 61, DE: 18 };
   const CALLOUT_SHIFT = {};
-  const CALLOUT_RUN = 4;
+  const CALLOUT_MIN_RUN = 4;
   const CALLOUT_GAP = 5;
 
   const COLS = 11, ROWS = 8;
@@ -323,15 +323,16 @@
 
   statusEl.remove();
 
-  const gStates = svg.append("g");
-  const gLines = svg.append("g");
-  const gLabels = svg.append("g");
-  const gSmallLabels = svg.append("g");
-  const gCallouts = svg.append("g");
+  const gZoom = svg.append("g");
+  const gStates = gZoom.append("g");
+  const gLines = gZoom.append("g");
+  const gLabels = gZoom.append("g");
+  const gSmallLabels = gZoom.append("g");
+  const gCallouts = gZoom.append("g");
 
   function tooltipHtml(d) {
     const region = d.row ? (d.row["region"] || "").trim() : "";
-    const metricLines = CONFIG.metrics.map(metric => `${metric.legendTitle}: ${metricDisplayValue(metric, d.row)}`);
+    const metricLines = CONFIG.metrics.map(metric => `<strong>${metric.legendTitle}:</strong> ${metricDisplayValue(metric, d.row)}`);
     return `<strong>${d.name}</strong><br>` +
       (region ? `<span class="sub">${region}</span><br><br>` : "") +
       metricLines.map(line => `<span class="sub">${line}</span>`).join("<br>");
@@ -405,11 +406,31 @@
   const normalStates = states.filter(d => !d.small);
   const smallStates = states.filter(d => d.small);
 
+  const callouts = gCallouts.selectAll("g.callout")
+    .data(smallStates, d => d.id)
+    .join("g")
+    .attr("class", "callout")
+    .attr("transform", d => `translate(${d.anchor[0] + CALLOUT_GAP},${d.anchor[1]})`)
+    .attr("opacity", 0);
+
+  callouts.append("text")
+    .attr("class", "callout-value")
+    .attr("dy", 0)
+    .text(d => d.abbr);
+
+  // The line's final leg only needs to run as far as the label itself is
+  // wide — short labels (like these two-letter abbreviations) get a short
+  // leg instead of the fixed-length one a longer label would need.
+  callouts.each(function (d) {
+    const textWidth = this.querySelector("text.callout-value").getComputedTextLength();
+    d.calloutRun = Math.max(CALLOUT_MIN_RUN, textWidth * 0.5);
+  });
+
   const calloutLines = gLines.selectAll("polyline.callout-line")
     .data(smallStates, d => d.id)
     .join("polyline")
     .attr("class", "callout-line")
-    .attr("points", d => `${d.lineStart[0]},${d.lineStart[1]} ${d.anchor[0] - CALLOUT_RUN},${d.anchor[1]} ${d.anchor[0]},${d.anchor[1]}`)
+    .attr("points", d => `${d.lineStart[0]},${d.lineStart[1]} ${d.anchor[0] - d.calloutRun},${d.anchor[1]} ${d.anchor[0]},${d.anchor[1]}`)
     .attr("opacity", 0);
 
   const normalLabels = gLabels.selectAll("g.state-label")
@@ -434,18 +455,6 @@
     .attr("dy", 0)
     .text(d => d.abbr);
 
-  const callouts = gCallouts.selectAll("g.callout")
-    .data(smallStates, d => d.id)
-    .join("g")
-    .attr("class", "callout")
-    .attr("transform", d => `translate(${d.anchor[0] + CALLOUT_GAP},${d.anchor[1]})`)
-    .attr("opacity", 0);
-
-  callouts.append("text")
-    .attr("class", "callout-value")
-    .attr("dy", 0)
-    .text(d => d.abbr);
-
   const labelOpacity = d3.scaleLinear().domain([0.35, 0.75]).range([0, 1]).clamp(true);
   const calloutOpacity = d3.scaleLinear().domain([0.15, 0.4]).range([1, 0]).clamp(true);
 
@@ -463,8 +472,8 @@
       const y = d.labelGeoC[1] + (d.gridC[1] - d.labelGeoC[1]) * t;
       return `translate(${x},${y})`;
     });
-    smallInteriorLabels.attr("opacity", d => labelOpacity(t) * (isOutsideRegion(d, fadeRegion) ? 0.35 : 1));
-    callouts.attr("opacity", d => calloutOpacity(t) * (isOutsideRegion(d, fadeRegion) ? 0.35 : 1));
+    smallInteriorLabels.attr("opacity", d => labelOpacity(t) * (isOutsideRegion(d, activeRegion) ? 0.35 : 1));
+    callouts.attr("opacity", d => calloutOpacity(t) * (isOutsideRegion(d, activeRegion) ? 0.35 : 1));
     calloutLines.attr("opacity", calloutOpacity(t));
     toggleBtn.setAttribute("aria-checked", t > 0.5);
     labelGeo.classList.toggle("active", t <= 0.5);
@@ -567,48 +576,74 @@
   renderLegend(currentMetric);
   renderMetricButtons();
 
-  // ---- Region highlight buttons -------------------------------------------
-  // Independent of the metric buttons above: hovering or clicking a region
-  // fades every state outside it, regardless of which metric is coloring
-  // the map.
+  // ---- Region highlight dropdown -------------------------------------------
+  // Independent of the metric buttons above: picking a region fades every
+  // state outside it (regardless of which metric is coloring the map) and
+  // zooms the map to fit the states inside it.
   const REGIONS = ["Northeast", "Midwest", "West", "Peripheral South", "Deep South"];
-  const regionButtonsEl = document.getElementById("regionButtons");
+  const regionSelectEl = document.getElementById("regionSelect");
+  const ZOOM_PADDING = 40;
+  const MAX_ZOOM = 4;
   let activeRegion = null;
-  let fadeRegion = null;
 
   function isOutsideRegion(d, region) {
     return !!region && (!d.row || (d.row["region"] || "").trim() !== region);
   }
 
   function applyRegionFade(region) {
-    fadeRegion = region;
     paths.classed("region-faded", d => isOutsideRegion(d, region));
     normalLabels.classed("region-faded", d => isOutsideRegion(d, region));
     smallInteriorLabels.attr("opacity", d => labelOpacity(currentT) * (isOutsideRegion(d, region) ? 0.35 : 1));
     callouts.attr("opacity", d => calloutOpacity(currentT) * (isOutsideRegion(d, region) ? 0.35 : 1));
   }
 
-  function renderRegionButtons() {
-    regionButtonsEl.innerHTML = "";
+  function zoomToRegion(region) {
+    if (!region) {
+      gZoom.transition().duration(500).attr("transform", "translate(0,0) scale(1)");
+      return;
+    }
+    const nodes = paths.filter(d => !isOutsideRegion(d, region)).nodes();
+    if (!nodes.length) return;
+    let box = null;
+    nodes.forEach(node => {
+      const b = node.getBBox();
+      if (!box) {
+        box = { x: b.x, y: b.y, x2: b.x + b.width, y2: b.y + b.height };
+      } else {
+        box.x = Math.min(box.x, b.x);
+        box.y = Math.min(box.y, b.y);
+        box.x2 = Math.max(box.x2, b.x + b.width);
+        box.y2 = Math.max(box.y2, b.y + b.height);
+      }
+    });
+    const w = (box.x2 - box.x) + ZOOM_PADDING * 2;
+    const h = (box.y2 - box.y) + ZOOM_PADDING * 2;
+    const scale = Math.min(CANVAS_W / w, HEIGHT / h, MAX_ZOOM);
+    const cx = (box.x + box.x2) / 2, cy = (box.y + box.y2) / 2;
+    const tx = CANVAS_W / 2 - cx * scale;
+    const ty = HEIGHT / 2 - cy * scale;
+    gZoom.transition().duration(500).attr("transform", `translate(${tx},${ty}) scale(${scale})`);
+  }
+
+  function populateRegionSelect() {
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "All regions";
+    regionSelectEl.append(allOption);
     REGIONS.forEach(region => {
-      const btn = document.createElement("button");
-      btn.className = "region-btn";
-      btn.type = "button";
-      btn.textContent = region;
-      btn.classList.toggle("active", region === activeRegion);
-      btn.setAttribute("aria-pressed", region === activeRegion);
-      btn.addEventListener("mouseenter", () => applyRegionFade(region));
-      btn.addEventListener("mouseleave", () => applyRegionFade(activeRegion));
-      btn.addEventListener("click", () => {
-        activeRegion = activeRegion === region ? null : region;
-        renderRegionButtons();
-        applyRegionFade(activeRegion);
-      });
-      regionButtonsEl.append(btn);
+      const opt = document.createElement("option");
+      opt.value = region;
+      opt.textContent = region;
+      regionSelectEl.append(opt);
+    });
+    regionSelectEl.addEventListener("change", () => {
+      activeRegion = regionSelectEl.value || null;
+      applyRegionFade(activeRegion);
+      zoomToRegion(activeRegion);
     });
   }
 
-  renderRegionButtons();
+  populateRegionSelect();
 
   const MIN_LABEL_PX = 12;
   const BASE_VALUE_SIZE = 14;
