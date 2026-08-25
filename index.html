@@ -33,7 +33,7 @@
       <div class="metric-note" id="metricNote"></div>
     </div>
     <div class="map-wrap">
-      <svg id="chart" viewBox="0 0 1120 850" role="img" aria-label="Map of US states morphing between true geography and an equal-area tile grid"></svg>
+      <svg id="chart" viewBox="0 0 1120 600" role="img" aria-label="Map of US states morphing between true geography and an equal-area tile grid"></svg>
       <div id="status" class="status">Loading state boundaries…</div>
     </div>
     <div class="region-buttons-row">
@@ -142,7 +142,7 @@
   const root = document.documentElement.style;
   root.setProperty("--div-none", CONFIG.noDataColor);
 
-  const WIDTH = 960, HEIGHT = 850, CANVAS_W = 1120;
+  const WIDTH = 940, HEIGHT = 600, CANVAS_W = 1120;
   const svg = d3.select("#chart");
   const statusEl = document.getElementById("status");
   const tooltip = d3.select("#tooltip");
@@ -174,7 +174,7 @@
   const CALLOUT_GAP = 5;
 
   const COLS = 11, ROWS = 8;
-  const CELL = 96, GAP = 3;
+  const CELL = 70, GAP = 3;
   const GRID_W = COLS * CELL, GRID_H = ROWS * CELL;
   const GRID_X0 = (CANVAS_W - GRID_W) / 2, GRID_Y0 = (HEIGHT - GRID_H) / 2;
 
