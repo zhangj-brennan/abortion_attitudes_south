@@ -1,0 +1,20 @@
+Drupal embed snippet for the State Abortion Landscape map
+===========================================================
+
+Paste this into a Custom HTML block (or wherever the iframe is placed)
+on the Drupal page. Replace YOUR_MAP_URL with the hosted URL of
+index.html.
+
+The listener script resizes the iframe to match the map's actual
+rendered height, using a message the map page posts to its parent
+window. Without it, the iframe keeps whatever height is set below
+and won't auto-fit the content.
+
+<iframe id="abortion-map-embed" src="YOUR_MAP_URL" style="width:100%; border:0; display:block;" scrolling="no" title="State Abortion Landscape"></iframe>
+<script>
+window.addEventListener("message", function (e) {
+  if (e.data && e.data.type === "brennan-embed-resize") {
+    document.getElementById("abortion-map-embed").style.height = e.data.height + "px";
+  }
+});
+</script>
