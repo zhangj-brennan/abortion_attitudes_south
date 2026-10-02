@@ -87,9 +87,9 @@
   const CONFIG = {
     // Page text
     pageTitle: "State Abortion Landscape",
-    sourceHtml: "<strong>Sources:</strong> Abortion access — Brennan Center for Justice, 2025. " +
-      "Maternal mortality rate (2018–2022) — KFF, State Health Facts. " +
-      "State partisan supermajorities (2026) — MultiState.us.",
+    sourceHtml: "<strong>Sources:</strong> Maternal mortality rate (2018–2022) — KFF, State Health Facts. " +
+      "State partisan supermajorities (2026) — MultiState.us. " +
+      "Abortion access — Center for Reproductive Rights (Details on each category can be found in the technical appendix).",
 
     // Data — one row per state. The CSV's own header text is used directly
     // as each metric's lookup key below, so re-pointing this at a new file
@@ -123,8 +123,8 @@
       },
       {
         key: "Maternal Mortality Rate (2018-2022) *per 100,000 live births",
-        buttonLabel: "Maternal Mortality Rate (2018 - 2022)",
-        legendTitle: "Maternal Mortality Rate (2018 - 2022)",
+        buttonLabel: "Maternal Mortality Rate (2018–2022)",
+        legendTitle: "Maternal mortality rate (2018–2022)",
         note: "Per 100,000 live births",
         type: "numeric",
         noDataLabel: "Not reported",
@@ -135,16 +135,16 @@
       {
         key: "State Partisan Supermajorities (2026)",
         buttonLabel: "State Partisan Supermajorities (2026)",
-        legendTitle: "State Partisan Supermajorities (2026)",
+        legendTitle: "State partisan supermajorities (2026)",
         type: "categorical",
         noDataLabel: "No data",
         categories: [
-          { value: "Dem - Both Chambers", label: "Dem — both chambers", color: "#007194" },
-          { value: "Dem - One Chamber", label: "Dem — one chamber", color: "#80b8c9" },
+          { value: "Dem - Both Chambers", label: "Both chambers are Democrat", color: "#007194" },
+          { value: "Dem - One Chamber", label: "One chamber is Democrat", color: "#80b8c9" },
           { value: "None", label: "No supermajority", color: "#cfcdc7" },
          // { value: "N/A", label: "No state legislature", color: "#e3e2dc" },
-          { value: "Rep - One Chamber", label: "Rep — one chamber", color: "#f68d91" },
-          { value: "Rep - Both Chambers", label: "Rep — both chambers", color: "#ed1c24" }
+          { value: "Rep - One Chamber", label: "One chamber is Republican", color: "#f68d91" },
+          { value: "Rep - Both Chambers", label: "Both chambers are Republican", color: "#ed1c24" }
         ]
       }
     ]
@@ -353,7 +353,7 @@
     const region = d.row ? (d.row["region"] || "").trim() : "";
     const metricLines = CONFIG.metrics.map(metric => `<strong>${metric.legendTitle}:</strong> ${metricDisplayValue(metric, d.row)}`);
     return `<strong>${d.name}</strong><br>` +
-      (region ? `<span class="sub">${region}</span><br><br>` : "") +
+      (region ? `<span class="sub"><strong>Region:</strong> ${region}</span><br><br>` : "") +
       metricLines.map(line => `<span class="sub">${line}</span>`).join("<br>");
   }
 
