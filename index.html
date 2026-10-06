@@ -63,11 +63,16 @@
 // page; see README for the snippet. No-ops when loaded standalone.
 (function () {
   if (window.self === window.top) return;
+  // Measure the content itself, not documentElement.scrollHeight — that
+  // never drops below the iframe's current height, so the frame could grow
+  // but never shrink back, leaving blank space at the bottom.
+  const container = document.getElementById("container");
   function reportHeight() {
-    const height = Math.ceil(document.documentElement.scrollHeight);
+    const marginBottom = parseFloat(getComputedStyle(container).marginBottom) || 0;
+    const height = Math.ceil(container.getBoundingClientRect().bottom + window.scrollY + marginBottom);
     window.parent.postMessage({ type: "brennan-embed-resize", height }, "*");
   }
-  new ResizeObserver(reportHeight).observe(document.body);
+  new ResizeObserver(reportHeight).observe(container);
   window.addEventListener("load", reportHeight);
   reportHeight();
 })();
