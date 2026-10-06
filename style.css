@@ -60,6 +60,15 @@ body {
   margin: 10px;
 }
 
+.figure-label {
+  margin-bottom: 6px;
+  font-family: "BentonStrong";
+  font-size: 12px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: rgb(237, 28, 36);
+}
+
 #title {
   max-width: 800px;
   border-top: 2px solid black;
