@@ -238,6 +238,27 @@ h3 {
   flex-direction: row;
   gap: 6px;
 }
+.legend-buckets--ranges {
+  flex-direction: column;
+  gap: 3px;
+  width: 300px;
+  font-family: "BentonMedium";
+  font-size: 10px;
+}
+.range-bar { display: flex; }
+.range-bar .swatch {
+  flex: 1;
+  height: 14px;
+  border: 1px solid white;
+  border-left-width: 0;
+}
+.range-bar .swatch:first-child { border-left-width: 1px; }
+.range-ticks { position: relative; height: 12px; }
+.range-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
 .legend-note {
   display: flex;
   align-items: center;
@@ -262,9 +283,6 @@ h3 {
   text-align: left;
   font-family: "BentonMedium";
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 4px 0 0;
 }
 
 svg { display: block; width: 100%; height: auto; }

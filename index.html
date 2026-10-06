@@ -26,11 +26,11 @@
     <div class="metric-buttons" id="metricButtons"></div>
     <div class="legend">
       <h3 id="legendTitle">Change in value</h3>
+      <div class="metric-note" id="metricNote"></div>
       <div class="legend-row">
         <div class="legend-buckets" id="legendBuckets"></div>
         <span class="legend-note" id="noDataNote"><span class="swatch"></span> <span id="noDataNoteText"></span></span>
       </div>
-      <div class="metric-note" id="metricNote"></div>
     </div>
     <div class="map-wrap">
       <svg id="chart" viewBox="0 0 1120 600" role="img" aria-label="Map of US states morphing between true geography and an equal-area tile grid"></svg>
@@ -87,9 +87,8 @@
   const CONFIG = {
     // Page text
     pageTitle: "State Abortion Landscape",
-    sourceHtml: "<strong>Sources:</strong> Maternal mortality rate (2018–2022) — KFF, State Health Facts. " +
-      "State partisan supermajorities (2026) — MultiState.us. " +
-      "Abortion access — Center for Reproductive Rights (Details on each category can be found in the technical appendix).",
+    sourceHtml: "<strong>Sources:</strong> Center for Reproductive Rights (abortion access), KFF (maternal mortality rates), " +
+      "and MultiState (state partisan supermajorities). Abortion access categories are defined in the technical appendix.",
 
     // Data — one row per state. The CSV's own header text is used directly
     // as each metric's lookup key below, so re-pointing this at a new file
@@ -109,12 +108,12 @@
     metrics: [
       {
         key: "Abortion Access (2025)",
-        buttonLabel: "Abortion Access (2025)",
+        buttonLabel: "Abortion access (2025)",
         legendTitle: "Abortion access (2025)",
         type: "categorical",
         noDataLabel: "Not classified",
         categories: [
-          { value: "expanded access", label: "Expanded access", color: "#ffcf01" },
+          { value: "expanded access", label: "Expanded", color: "#ffcf01" },
           { value: "protected", label: "Protected", color: "#ffe680" },
           { value: "not protected", label: "Not protected", color: "#ddc0dd" },
           { value: "hostile", label: "Hostile", color: "#a374a3" },
@@ -123,28 +122,30 @@
       },
       {
         key: "Maternal Mortality Rate (2018-2022) *per 100,000 live births",
-        buttonLabel: "Maternal Mortality Rate (2018–2022)",
-        legendTitle: "Maternal mortality rate (2018–2022)",
+        buttonLabel: "Maternal mortality rates (2018–2022)",
+        legendTitle: "Maternal mortality rates (2018–2022)",
         note: "Per 100,000 live births",
         type: "numeric",
         noDataLabel: "Not reported",
         parse: raw => (raw == null || raw.trim() === "" || raw.trim().toUpperCase() === "NR") ? null : +raw,
         format: v => `${v} per 100,000 live births`,
-        colorRange: ["#b88ab8", "#711471"]
+        colorRange: ["#b88ab8", "#711471"],
+        // Bin edges — states are colored in steps and the legend shows ranges.
+        thresholds: [15, 20, 25, 30, 35]
       },
       {
         key: "State Partisan Supermajorities (2026)",
-        buttonLabel: "State Partisan Supermajorities (2026)",
+        buttonLabel: "State partisan supermajorities (2026)",
         legendTitle: "State partisan supermajorities (2026)",
         type: "categorical",
         noDataLabel: "No data",
         categories: [
-          { value: "Dem - Both Chambers", label: "Both chambers are Democrat", color: "#007194" },
-          { value: "Dem - One Chamber", label: "One chamber is Democrat", color: "#80b8c9" },
+          { value: "Dem - Both Chambers", label: "Both chambers Democratic", color: "#007194" },
+          { value: "Dem - One Chamber", label: "One chamber Democratic", color: "#80b8c9" },
           { value: "None", label: "No supermajority", color: "#cfcdc7" },
          // { value: "N/A", label: "No state legislature", color: "#e3e2dc" },
-          { value: "Rep - One Chamber", label: "One chamber is Republican", color: "#f68d91" },
-          { value: "Rep - Both Chambers", label: "Both chambers are Republican", color: "#ed1c24" }
+          { value: "Rep - One Chamber", label: "One chamber Republican", color: "#f68d91" },
+          { value: "Rep - Both Chambers", label: "Both chambers Republican", color: "#ed1c24" }
         ]
       }
     ]
@@ -252,7 +253,13 @@
       .map(r => metricNumericValue(metric, r[metric.key]))
       .filter(v => v != null && !Number.isNaN(v));
     const domain = [Math.min(...values), Math.max(...values)];
-    const scale = d3.scaleSequential(d3.interpolateRgb(metric.colorRange[0], metric.colorRange[1])).domain(domain);
+    const interpolate = d3.interpolateRgb(metric.colorRange[0], metric.colorRange[1]);
+    if (metric.thresholds) {
+      const colors = d3.quantize(interpolate, metric.thresholds.length + 1);
+      const scale = d3.scaleThreshold().domain(metric.thresholds).range(colors);
+      return { scale, domain };
+    }
+    const scale = d3.scaleSequential(interpolate).domain(domain);
     return { scale, domain };
   }
 
@@ -539,9 +546,32 @@
     legendTitleEl.textContent = metric.legendTitle;
     legendBucketsEl.innerHTML = "";
     legendBucketsEl.classList.toggle("legend-buckets--categorical", metric.type === "categorical");
+    legendBucketsEl.classList.toggle("legend-buckets--ranges", !!metric.thresholds);
 
     if (metric.type === "categorical") {
       metric.categories.forEach(cat => addLegendBucket(cat.color, cat.label));
+    } else if (metric.thresholds) {
+      // One connected bar per bin; labels sit at each color change, with the
+      // data's min and max at the two ends.
+      const [min, max] = metric._scale.domain;
+      const colors = metric._scale.scale.range();
+      const bar = document.createElement("div");
+      bar.className = "range-bar";
+      colors.forEach(color => {
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = color;
+        bar.append(swatch);
+      });
+      const ticks = document.createElement("div");
+      ticks.className = "range-ticks";
+      [min, ...metric.thresholds, max].forEach((v, i) => {
+        const tick = document.createElement("span");
+        tick.style.left = `${(i / colors.length) * 100}%`;
+        tick.textContent = v;
+        ticks.append(tick);
+      });
+      legendBucketsEl.append(bar, ticks);
     } else {
       const [min, max] = metric._scale.domain;
       const steps = 5;
